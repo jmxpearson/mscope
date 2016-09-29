@@ -37,8 +37,8 @@ function handleFileSelect(evt) {
 
 document.getElementById('files').addEventListener('change', handleFileSelect, false);
 
-function readRecord(theFile, offset=0) {
-    // take an OpenEphys .continuous file object and read a record from it starting at given byte offset
+function readRecord(theFile, recnum=0) {
+    // take an OpenEphys .continuous file object and read a given record
     // OpenEphys record:
     // - int64: timestamp: 8 (little)
     // - uint16: number of samples in record: 2 (little)
@@ -54,16 +54,23 @@ function readRecord(theFile, offset=0) {
         console.log(buff.byteLength)
 
         let rec = {}
-        let view = new DataView(buff, offset, 12);
+        let view = new DataView(buff, 0, 12);
         rec.tstamp = 'foo';
         rec.nsamples = view.getUint16(8, true);
         rec.recordingNumber = view.getUint16(10, true);
-        // warning: typed arrays default to system endianness!!!
-        rec.samples = new Int16Array(buff, offset + 12, 1024);
-        rec.endcode = new Uint8Array(buff, offset + 12 + 2048, 10);
+        rec.endcode = new Uint8Array(buff, 0 + 12 + 2048, 10);
+
+        // now read in samples: need to preserve endianness
+        rec.samples = new Int16Array(1024);
+        let source = new DataView(buff, 12, 2048);  // source bytes
+        let sink = new DataView(rec.samples.buffer);
+        for (let i = 0; i < source.byteLength; i += 2) {
+            sink.setInt16(i, source.getInt16(i, false));
+        }
+
         console.log(rec);
     }
 
-    reader.readAsArrayBuffer(theFile.slice(HEADER_LENGTH, HEADER_LENGTH + RECORD_LENGTH));
+    reader.readAsArrayBuffer(theFile.slice(HEADER_LENGTH, HEADER_LENGTH + (recnum + 1) * RECORD_LENGTH));
 
 }
