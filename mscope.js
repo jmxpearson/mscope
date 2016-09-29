@@ -9,9 +9,15 @@
 // total:
 const RECORD_LENGTH = 2070;
 const HEADER_LENGTH = 1024;
+let files = [];
+let headers = [];
+let numrecs = 10;
+let dataArray = [];
 
 function handleFileSelect(evt) {
-    let files = evt.target.files; // FileList object
+    files = evt.target.files; // FileList object
+    headers = new Array(files.length);  // clean out headers if we've loaded before
+    dataArray = new Array(files.length);
 
     // files is a FileList of File objects. List some properties.
     // let output = [];
@@ -33,18 +39,16 @@ function handleFileSelect(evt) {
             let str = String.fromCharCode.apply(null, view);
             let header = {};
             eval(str);
-            console.log(header);
+            headers[i] = header;
         }
 
         reader.readAsArrayBuffer(f.slice(0, HEADER_LENGTH));
 
         recReader.onloadend = function(evt) {
             let buff = evt.target.result;
-            console.log(buff.byteLength)
-            readRecords(buff, 0, 10);
+            dataArray[i] = readRecords(buff, 0, 10);
         }
 
-        let numrecs = 10;
         recReader.readAsArrayBuffer(f.slice(HEADER_LENGTH, HEADER_LENGTH + (numrecs + 1) * RECORD_LENGTH));
 
     }
@@ -54,19 +58,23 @@ function handleFileSelect(evt) {
 document.getElementById('files').addEventListener('change', handleFileSelect, false);
 
 function readRecords(buff, startrecord=0, numrecs=1) {
-    // take an OpenEphys .continuous file buffer object and read a given record
-    let recarray = new Array(numrecs);
+    // take an OpenEphys .continuous file buffer object and read a given
+    // number of records
+    // return typed array of all combined data
+    let data = new Int16Array(numrecs * 1024);  // output buffer
 
+    // read each data record,
     for (let r = 0; r < numrecs; r++) {
-        let rec = {}
+        let rec = {};
         let offset = (r + startrecord) * RECORD_LENGTH;
         let view = new DataView(buff, offset, 12);
-        rec.tstamp = 'foo';
+
+        rec.tstamp = 'foo';  // need to fix but no native js int64 support
         rec.nsamples = view.getUint16(8, true);
         rec.recordingNumber = view.getUint16(10, true);
         rec.endcode = new Uint8Array(buff, 0 + 12 + 2048, 10);
 
-        // now read in samples: need to preserve endianness
+        // now read in samples: need to handle endianness
         rec.samples = new Int16Array(1024);
         let source = new DataView(buff, offset + 12, 2048);  // source bytes
         let sink = new DataView(rec.samples.buffer);
@@ -74,11 +82,9 @@ function readRecords(buff, startrecord=0, numrecs=1) {
             sink.setInt16(i, source.getInt16(i, false));
         }
 
-        recarray[r] = rec;
-
+        data.set(rec.samples, r * rec.samples.length);
     }
+    console.log(data)
 
-
-    console.log(recarray);
-
+    return data
 }
