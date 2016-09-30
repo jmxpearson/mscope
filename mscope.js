@@ -14,8 +14,20 @@ let files = [];
 let headers = [];
 let numrecs = 10;
 let dataArray = [];
+const plotpars = {
+    start: 0,  // index of current data buffer at which to start plotting
+    stop: 1000,  // index of current data buffer at which to stop plotting
+    skip: 1  // stride between successive data to plot
+};
+
+// proof of concept to get scroll position
+// let plotcontainer = document.getElementById('plotcontainer');
+// plotcontainer.onscroll = function(evt) {
+//     console.log(evt.target.scrollLeft);
+// }
 
 function isLittleEndian(){
+    // copied from StackOverflow
     var a = new ArrayBuffer(4);
     var b = new Uint8Array(a);
     var c = new Uint32Array(a);
@@ -27,20 +39,18 @@ function isLittleEndian(){
     if(c[0] == 0xa1b2c3d4) return false;
     else throw new Error("Something crazy just happened");
 }
+
+
 function handleFileSelect(evt) {
     files = evt.target.files; // FileList object
     headers = new Array(files.length);  // clean out headers if we've loaded before
     dataArray = new Array(files.length);
+    let plotdata = new Array(files.length);
+    for (let i = 0; i < files.length; i++) {
+        plotdata[i] = {y: [0], mode: 'lines'};
+    }
 
-    // files is a FileList of File objects. List some properties.
-    // let output = [];
-    // for (let i = 0, f; f = files[i]; i++) {
-    //     output.push('<li><strong>', escape(f.name), '</strong> (', f.type || 'n/a', ') - ',
-    //     f.size, ' bytes, last modified: ',
-    //     f.lastModifiedDate ? f.lastModifiedDate.toLocaleDateString() : 'n/a',
-    //     '</li>');
-    // }
-    // document.getElementById('list').innerHTML = '<ul>' + output.join('') + '</ul>';
+    Plotly.newPlot('plotdiv', plotdata);
 
     for (let i = 0, f; f = files[i]; i++) {
         let reader = new FileReader();
@@ -63,12 +73,23 @@ function handleFileSelect(evt) {
         recReader.onloadend = function(evt) {
             let buff = evt.target.result;
             dataArray[i] = readRecords(buff, headers[i], 0, numrecs);
-            Plotly.plot('plotdiv', dataArray);
+            updatePlot(i);
         }
-
-
     }
+}
 
+function updatePlot(idx) {
+    // make the plot after loading data
+    // idx in the data index to update
+    let {start, stop, skip} = plotpars;
+    let data = new Array(Math.floor((stop - start)/skip));
+    for (let t = start, j=0; t < stop; t += skip, j++) {
+        data[j] = dataArray[idx][t] * headers[idx].bitVolts;
+    }
+    let plotdata = {y: data, mode: 'lines'};
+    let plotDiv = document.getElementById('plotdiv');
+    Plotly.deleteTraces('plotdiv', idx);
+    Plotly.addTraces('plotdiv', plotdata, idx);
 }
 
 document.getElementById('files').addEventListener('change', handleFileSelect, false);
@@ -77,7 +98,7 @@ function readRecords(buff, header, startrecord=0, numrecs=1) {
     // take an OpenEphys .continuous file buffer object and read a given
     // number of records
     // return typed array of all combined data
-    let data = new Float32Array(numrecs * 1024);  // output buffer
+    let data = new Int16Array(numrecs * 1024);  // output buffer
 
     // read each data record,
     for (let r = 0; r < numrecs; r++) {
@@ -91,15 +112,15 @@ function readRecords(buff, header, startrecord=0, numrecs=1) {
         rec.endcode = new Uint8Array(buff, 0 + 12 + 2048, 10);
 
         // now read in samples: need to handle endianness
-        rec.samples = new Float32Array(1024);
+        rec.samples = new Int16Array(1024);  // has endianness of machine
         let source = new DataView(buff, offset + 12, 2048);  // source bytes
         let sink = new DataView(rec.samples.buffer);
-        for (let i = 0, j = 0; i < source.byteLength; i += 2, j += 4) {
-            sink.setFloat32(j, header.bitVolts * source.getInt16(i), ENDIANNESS);
+        for (let i = 0; i < source.byteLength; i += 2) {
+            sink.setInt16(i, header.bitVolts * source.getInt16(i), ENDIANNESS);
         }
 
         data.set(rec.samples, r * rec.samples.length);
     }
 
-    return {y: Array.from(data), mode: 'lines'}
+    return data
 }
