@@ -49,8 +49,10 @@ function handleFileSelect(evt) {
     for (let i = 0; i < files.length; i++) {
         plotdata[i] = {y: [0], mode: 'lines'};
     }
+    let layout = {hovermode: false, showlegend: false};
+    let config = {displaylogo: false, displayModeBar: false};
 
-    Plotly.newPlot('plotdiv', plotdata);
+    Plotly.newPlot('plotdiv', plotdata, layout, config);
 
     for (let i = 0, f; f = files[i]; i++) {
         let reader = new FileReader();
