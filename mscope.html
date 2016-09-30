@@ -4,8 +4,10 @@
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-    <input type="file" id="files" name="files[]" multiple />
-    <output id="list"></output>
+    <div id="inputdiv">
+        <p>Select files to view:</p>
+        <input type="file" id="files" name="files[]" multiple />
+    </div>
     <div id="plotcontainer" style="width: auto; overflow: scroll">
         <div id="plotdiv" style="width: 2000px; height: 400px;"></div>
     </div>
